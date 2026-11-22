@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cynthia — Verified Answer AI</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0;
+         padding: 1rem 1.25rem; line-height: 1.45; }
+  h1 { font-size: 1.25rem; margin: 0 0 .25rem; }
+  .sub { opacity: .75; margin: 0 0 1rem; font-size: .92rem; }
+  .banner { border: 1px solid #b58900; background: #fff8e1; color: #5d4a00;
+            padding: .6rem .8rem; border-radius: .5rem; margin-bottom: 1rem;
+            font-size: .92rem; }
+  @media (prefers-color-scheme: dark) {
+    .banner { background: #3a2f00; color: #ffe082; }
+  }
+  .row { display: flex; gap: .5rem; }
+  input[type="text"], input[type="url"], select {
+    flex: 1; padding: .55rem .7rem; font-size: 1rem;
+    border: 1px solid #8884; border-radius: .5rem; }
+  button { padding: .55rem 1rem; font-size: 1rem; border-radius: .5rem;
+           border: 1px solid #8884; cursor: pointer; }
+  #answer { white-space: pre-wrap; border: 1px solid #8884;
+            border-radius: .5rem; padding: .8rem; margin-top: 1rem;
+            min-height: 3rem; }
+  .meta { font-size: .85rem; opacity: .75; margin-top: .4rem; }
+  #config { margin-top: 2rem; border-top: 1px solid #8884; padding-top: 1rem; }
+  #config label { display: block; margin: .6rem 0 .2rem; font-size: .92rem; }
+  .hidden { display: none; }
+  .error { color: #b00020; }
+</style>
+</head>
+<body>
+<h1>Cynthia</h1>
+<p class="sub">The verified-answer AI. Cynthia answers customer
+questions only from facts the business approves — verbatim — and says
+she doesn't know instead of inventing prices or policies.</p>
+
+<div id="demo-banner" class="banner hidden">
+  <strong>Demo mode.</strong> This location is answering from the
+  Planet Leads demo fact store so you can see how Cynthia works. Those
+  are Planet Leads' facts, not this business's. Before real customers
+  use her, an admin points this location at the business's own
+  provisioned Cynthia (below).
+</div>
+
+<div id="status" class="meta">Connecting…</div>
+
+<form id="ask-form" class="row" autocomplete="off">
+  <input type="text" id="question" placeholder="Ask Cynthia a question…"
+         aria-label="Question for Cynthia" required>
+  <button type="submit">Ask</button>
+</form>
+<div id="answer" aria-live="polite"></div>
+<div id="answer-meta" class="meta"></div>
+
+<section id="config" class="hidden">
+  <h2 style="font-size:1.05rem;">Cynthia setup for this location</h2>
+  <p class="meta">Admins only. Planet Leads provisions each business's
+  own Cynthia — with that business's approved facts — and provides its
+  endpoint at setup. Paste it here to take this location live.</p>
+  <label for="endpoint">Provisioned Cynthia endpoint (https://…)</label>
+  <div class="row">
+    <input type="url" id="endpoint" placeholder="https://…/mcp">
+    <select id="transport" aria-label="Endpoint type">
+      <option value="mcp">MCP</option>
+      <option value="rest">REST</option>
+    </select>
+  </div>
+  <div class="row" style="margin-top:.6rem;">
+    <button type="button" id="save-provisioned">Use this Cynthia</button>
+    <button type="button" id="save-demo">Back to demo</button>
+  </div>
+  <div id="config-result" class="meta"></div>
+</section>
+
+<script>
+"use strict";
+// Custom Page user context, per HighLevel's official "User Context in
+// Marketplace Apps" doc: ask the parent window for the encrypted user
+// payload, then let OUR backend decrypt it with the Shared Secret.
+// The secret never appears in this page; the browser only ever holds
+// the encrypted blob and the decrypted, non-secret context fields.
+let encryptedData = null;
+let tenant = null;
+
+function requestUserData() {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("Timed out waiting for HighLevel user data. " +
+        "Open Cynthia from inside HighLevel.")), 15000);
+    const handler = ({ data }) => {
+      if (data && data.message === "REQUEST_USER_DATA_RESPONSE") {
+        window.removeEventListener("message", handler);
+        clearTimeout(timer);
+        resolve(data.payload);
+      }
+    };
+    window.addEventListener("message", handler);
+    window.parent.postMessage({ message: "REQUEST_USER_DATA" }, "*");
+  });
+}
+
+async function postJSON(url, body) {
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error(data.detail || data.error || resp.status);
+  return data;
+}
+
+function renderTenant() {
+  const status = document.getElementById("status");
+  const banner = document.getElementById("demo-banner");
+  const config = document.getElementById("config");
+  if (!tenant) { status.textContent = "Not connected."; return; }
+  if (!tenant.installed) {
+    status.textContent = "Cynthia is not installed for this location yet.";
+  } else if (tenant.mode === "provisioned") {
+    status.textContent = "Live: answering from this business's own " +
+      "approved facts.";
+    banner.classList.add("hidden");
+  } else {
+    status.textContent = "Installed (demo fact store).";
+    banner.classList.remove("hidden");
+  }
+  // The config section renders for any signed-in admin context; the
+  // server enforces the admin role on save regardless.
+  config.classList.remove("hidden");
+}
+
+async function init() {
+  const status = document.getElementById("status");
+  try {
+    encryptedData = await requestUserData();
+    const session = await postJSON("/api/session", { encryptedData });
+    tenant = session.tenant;
+    renderTenant();
+  } catch (err) {
+    status.innerHTML = '<span class="error"></span>';
+    status.querySelector(".error").textContent = err.message;
+  }
+}
+
+document.getElementById("ask-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = document.getElementById("question").value.trim();
+  const answer = document.getElementById("answer");
+  const meta = document.getElementById("answer-meta");
+  if (!q || !encryptedData) return;
+  answer.textContent = "Asking Cynthia…";
+  meta.textContent = "";
+  try {
+    const result = await postJSON("/api/ask",
+      { encryptedData, question: q });
+    answer.textContent = result.answer;
+    meta.textContent = result.matched
+      ? "Verified answer from " +
+        (result.mode === "provisioned"
+          ? "this business's approved facts."
+          : "the demo fact store.")
+      : "No verified answer — Cynthia won't guess.";
+  } catch (err) {
+    answer.textContent = "";
+    meta.innerHTML = '<span class="error"></span>';
+    meta.querySelector(".error").textContent = err.message;
+  }
+});
+
+document.getElementById("save-provisioned")
+  .addEventListener("click", async () => {
+    const out = document.getElementById("config-result");
+    try {
+      const data = await postJSON("/api/config", {
+        encryptedData,
+        mode: "provisioned",
+        endpoint: document.getElementById("endpoint").value.trim(),
+        transport: document.getElementById("transport").value,
+      });
+      tenant = data.tenant;
+      renderTenant();
+      out.textContent = "Saved. This location now uses its own Cynthia.";
+    } catch (err) { out.textContent = err.message; }
+  });
+
+document.getElementById("save-demo").addEventListener("click", async () => {
+  const out = document.getElementById("config-result");
+  try {
+    const data = await postJSON("/api/config",
+      { encryptedData, mode: "demo" });
+    tenant = data.tenant;
+    renderTenant();
+    out.textContent = "Saved. This location is back on the demo store.";
+  } catch (err) { out.textContent = err.message; }
+});
+
+init();
+</script>
+</body>
+</html>
