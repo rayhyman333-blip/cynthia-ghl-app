@@ -42,7 +42,7 @@ class Config:
     # the REST facade endpoints exist in code (~/workspace/work/
     # cynthia-api-facade) but the facade is not deployed, so "mcp"
     # against the live server is the working default.
-    cynthia_mcp_url: str = "https://cynthia-mcp-server.onrender.com/mcp"
+    cynthia_mcp_url: str = "https://cynthia-mcp-server-6d5fb7.apps.deployvera.com/mcp"
     cynthia_rest_url: str = ""  # set when a facade deployment exists
 
     # Server + storage.
@@ -77,7 +77,7 @@ class Config:
                 "GHL_WHITELABEL_INSTALL", "").lower() in ("1", "true"),
             cynthia_mcp_url=env(
                 "CYNTHIA_MCP_URL",
-                "https://cynthia-mcp-server.onrender.com/mcp"),
+                "https://cynthia-mcp-server-6d5fb7.apps.deployvera.com/mcp"),
             cynthia_rest_url=env("CYNTHIA_REST_URL", ""),
             host=env("HOST", "127.0.0.1"),
             port=int(env("PORT", "8200")),
