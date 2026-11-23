@@ -4,7 +4,7 @@ Cynthia's REAL, implemented API surface (inspected 2026-11-22 in
 ~/workspace/work/cynthia-mcp-server and ~/workspace/work/cynthia-api-facade):
 
   LIVE — MCP over Streamable HTTP at
-  https://cynthia-mcp-server.onrender.com/mcp, tools:
+  https://cynthia-mcp-server-6d5fb7.apps.deployvera.com/mcp, tools:
       ask_cynthia(question)  -> "Verified answer:\n..." or an honest
                                 "I don't know — ..." abstention, or
                                 "Clarification needed:\n..."
@@ -43,7 +43,7 @@ from __future__ import annotations
 import json
 import urllib.request
 
-DEFAULT_MCP_URL = "https://cynthia-mcp-server.onrender.com/mcp"
+DEFAULT_MCP_URL = "https://cynthia-mcp-server-6d5fb7.apps.deployvera.com/mcp"
 _PROTOCOL_VERSION = "2025-03-26"
 
 
